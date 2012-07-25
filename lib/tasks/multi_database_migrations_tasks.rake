@@ -7,8 +7,8 @@ module MultiMigrations
   end
   
   def self.identify_configuration
-    if ActiveRecord::Base.configurations.has_key?("#{ENV['DATABASE']}_#{RAILS_ENV}")
-      return "#{ENV['DATABASE']}_#{RAILS_ENV}"
+    if ActiveRecord::Base.configurations.has_key?("#{ENV['DATABASE']}_#{Rails.env}")
+      return "#{ENV['DATABASE']}_#{Rails.env}"
     else
       match = ActiveRecord::Base.configurations.find { |config| config[1]['database'] == ENV['DATABASE'] }
       return match[0] unless match.nil?
@@ -23,14 +23,16 @@ namespace :db do
       MultiMigrations.make_connection(ENV['DATABASE'])
       ActiveRecord::Migration.verbose = ENV["VERBOSE"] ? ENV["VERBOSE"] == "true" : true
       ActiveRecord::Migrator.migrate("db/migrate/#{ENV['DATABASE']}", ENV["VERSION"] ? ENV["VERSION"].to_i : nil)
+      Rake::Task["db:multi:schema:dump"].invoke if ActiveRecord::Base.schema_format == :ruby
     end
     
     namespace :migrate do
       desc  'Rollbacks the database one migration and re migrate up. If you want to rollback more than one step, define STEP=x'
       task :redo => [ 'db:multi:rollback', 'db:multi:migrate' ]
 
-      desc 'Resets your database using your migrations for the current environment'
-      task :reset => ["db:multi:drop", "db:multi:create", "db:multi:migrate"]
+     # TODO: Implement db:multi:drop, db:multi:create
+     #desc 'Resets your database using your migrations for the current environment'
+     #task :reset => ["db:multi:drop", "db:multi:create", "db:multi:migrate"]
 
       desc 'Runs the "up" for a given migration VERSION.'
       task :up => :environment do
@@ -65,7 +67,7 @@ namespace :db do
       task :dump => :environment do
         MultiMigrations.make_connection(ENV['DATABASE'])
         require 'active_record/schema_dumper'
-        File.open(ENV['SCHEMA'] || "db/schema_#{ENV["DATABASE"]}.rb", "w") do |file|
+        File.open(ENV['SCHEMA'] || "db/schema_#{ENV["DATABASE"]}.rb", "w:utf-8") do |file|
           ActiveRecord::SchemaDumper.dump(ActiveRecord::Base.connection, file)
         end
       end
